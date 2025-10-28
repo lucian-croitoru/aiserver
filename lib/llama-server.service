@@ -1,0 +1,17 @@
+# Place this file in /etc/systemd/system
+# After placing it, run:
+#  - `sudo systemctl daemon-reload`
+#  - `sudo systemctl enable llama-server.service`
+
+[Unit]
+Description=llama.cpp server
+After=multi-user.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/llama-server.env
+ExecStart=/usr/local/bin/llama-server.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

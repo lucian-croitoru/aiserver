@@ -1,0 +1,17 @@
+# Place this file in /etc/systemd/system
+# After placing it, run:
+#  - `sudo systemctl daemon-reload`
+#  - `sudo systemctl enable nvidia-settings.service`
+
+[Unit]
+Description=NVIDIA Settings Configuration
+After=multi-user.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/nvidia-settings.env
+ExecStart=/usr/local/bin/nvidia_settings.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
