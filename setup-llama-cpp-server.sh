@@ -1,57 +1,153 @@
 #!/bin/bash
 
-# Update packages and install requirements
-apt update && apt upgrade -y
-# Install minimal requirements (vulkan)
-apt-get install -y wget unzip nvidia-driver-580 nvidia-cuda-toolkit nvtop cifs-utils
-# Install additional requirements (cuda)
-# TODO...
+################################################
+#                                              #
+#   Installation script for llama.cpp server   #
+#                                              #
+################################################
 
-# Get latest release tag and build URL and filename variable
+# Exit immediately on error
+set -e
+
+# Define global variables
+REQUIREMENTS=(wget unzip nvidia-driver-580 nvidia-cuda-toolkit nvtop cifs-utils) # TODO: check for CUDA
+
+RESET_NVIDIA_SETTINGS_CONFIG=0
+RESET_LLAMA_SERVER_CONFIG=0
+INSTALL_DIR="/usr/local"
+NVIDIA_SETTINGS_SERVICE="nvidia-settings"
+LLAMA_SERVER_SERVICE="llama-server"
+
 RELEASE="b6816"
 LLAMA_CPP_VULKAN="llama-$RELEASE-bin-ubuntu-vulkan-x64.zip"
 LLAMA_CPP_CUDA="llama-$RELEASE-bin-ubuntu-x64.zip"
 
 
-# Clean up old installation
-echo "Removing any old installations..."
-rm -rf /usr/local/llama-cpp-vulkan
-rm -rf /usr/local/llama-cpp-cuda
-systemctl stop nvidia-settings.service
-systemctl stop llama-server.service
+# Set a log prefix for every internal `echo` command
+LOG_PREFIX="[setup-llama-cpp-server] "
+echo() {
+  builtin echo "$LOG_PREFIX $*"
+}
 
-# Create folders
-echo "Creating folders..."
-mkdir /usr/local/llama-cpp-vulkan
-mkdir /usr/local/llama-cpp-cuda
-mkdir /etc/models
+echo "Starting..."
+echo "Checking for old installations..."
+
+# Check for existing nvidia-settings config
+if test -f "/etc/$NVIDIA_SETTINGS_SERVICE.env"; then
+  echo "WARNING: existing configuration found for [$NVIDIA_SETTINGS_SERVICE.service]"
+  while true; do
+    read -p "$LOG_PREFIX Do you want to 'keep' or 'reset'?: " response
+    case $response in
+      [Kk][Ee][Ee][Pp])
+        # Do nothing
+        break
+        ;;
+      [Rr][Ee][Ss][Ee][Tt])
+        # Flag reset settings
+        RESET_NVIDIA_SETTINGS_CONFIG=1
+        break
+        ;;
+      *)
+        echo "Please answer with 'keep' or 'reset'."
+        ;;
+    esac
+  done
+fi
+
+# Check for existing llama-server config
+if test -f "/etc/$LLAMA_SERVER_SERVICE.env"; then
+  echo "WARNING: existing configuration found for [$LLAMA_SERVER_SERVICE.service]"
+  while true; do
+    read -p "$LOG_PREFIX Do you want to 'keep' or 'reset'?: " response
+    case $response in
+      [Kk][Ee][Ee][Pp])
+        # Do nothing
+        break
+        ;;
+      [Rr][Ee][Ss][Ee][Tt])
+        # Flag reset settings
+        RESET_LLAMA_SERVER_CONFIG=1
+        break
+        ;;
+      *)
+        echo "Please answer with 'keep' or 'reset'."
+        ;;
+    esac
+  done
+fi
+
+
+# Install minimal requirements
+echo "Checking requirements..."
+for pkg in "${REQUIREMENTS[@]}"; do
+    if [ ! dpkg -s "$pkg" &>/dev/null ]; then
+        echo "Installing required package: $pkg"
+        apt-get install -y "$pkg"
+    fi
+done
+
+
+### Install llama.cpp
+# Stop service if running
+if systemctl cat "$LLAMA_SERVER_SERVICE.service" &>/dev/null; then
+    if systemctl is-active --quiet "$LLAMA_SERVER_SERVICE.service"; then
+        # Service exists and is running: stop the service
+        echo "Stopping $LLAMA_SERVER_SERVICE.service..."
+        systemctl stop "$LLAMA_SERVER_SERVICE".service
+    fi
+fi
+
+# Cleanup folders
+echo "Installing $LLAMA_SERVER_SERVICE..."
+rm -rf $INSTALL_DIR/llama-cpp-vulkan
+rm -rf $INSTALL_DIR/llama-cpp-cuda
+mkdir $INSTALL_DIR/llama-cpp-vulkan
+mkdir $INSTALL_DIR/llama-cpp-cuda
 
 # Download release
-echo "Downloading CUDA release..."
-wget -O /usr/local/llama-cpp-cuda/$LLAMA_CPP_CUDA "https://github.com/ggml-org/llama.cpp/releases/download/$RELEASE/$LLAMA_CPP_CUDA"
-unzip /usr/local/llama-cpp-cuda/$LLAMA_CPP_CUDA -d /usr/local/llama-cpp-cuda
-
 echo "Downloading Vulkan release..."
-wget -O /usr/local/llama-cpp-vulkan/$LLAMA_CPP_VULKAN "https://github.com/ggml-org/llama.cpp/releases/download/$RELEASE/$LLAMA_CPP_VULKAN"
-unzip /usr/local/llama-cpp-vulkan/$LLAMA_CPP_VULKAN -d /usr/local/llama-cpp-vulkan
+wget -O $INSTALL_DIR/llama-cpp-vulkan/$LLAMA_CPP_VULKAN "https://github.com/ggml-org/llama.cpp/releases/download/$RELEASE/$LLAMA_CPP_VULKAN"
+unzip $INSTALL_DIR/llama-cpp-vulkan/$LLAMA_CPP_VULKAN -d $INSTALL_DIR/llama-cpp-vulkan
+
+echo "Downloading CUDA release..."
+wget -O $INSTALL_DIR/llama-cpp-cuda/$LLAMA_CPP_CUDA "https://github.com/ggml-org/llama.cpp/releases/download/$RELEASE/$LLAMA_CPP_CUDA"
+unzip $INSTALL_DIR/llama-cpp-cuda/$LLAMA_CPP_CUDA -d $INSTALL_DIR/llama-cpp-cuda
+
 
 # Setup services
 echo "Setting up services..."
-cp lib/*.env /etc
-cp lib/*.sh /usr/local/bin
-cp lib/*.service /etc/systemd/system
-chmod +x /usr/local/bin/nvidia-settings.sh
-chmod +x /usr/local/bin/llama-server.sh
+if [ $RESET_NVIDIA_SETTINGS_CONFIG -gt 0 ]; then
+  cp -f lib/$NVIDIA_SETTINGS_SERVICE.env /etc/$NVIDIA_SETTINGS_SERVICE.env
+fi
 
+if [ $RESET_LLAMA_SERVER_CONFIG -gt 0 ]; then
+  cp -f lib/$LLAMA_SERVER_SERVICE.env /etc/$LLAMA_SERVER_SERVICE.env
+fi
+
+cp lib/*.sh $INSTALL_DIR/bin
+cp lib/*.service /etc/systemd/system
+chmod +x $INSTALL_DIR/bin/$NVIDIA_SETTINGS_SERVICE.sh
+chmod +x $INSTALL_DIR/bin/$LLAMA_SERVER_SERVICE.sh
 systemctl daemon-reload
-systemctl enable nvidia-settings.service
-systemctl enable llama-server.service
-systemctl start nvidia-settings.service
+systemctl enable $NVIDIA_SETTINGS_SERVICE.service
+systemctl enable $LLAMA_SERVER_SERVICE.service
+
+
+# Restart services
+echo "Restarting $NVIDIA_SETTINGS_SERVICE.service..."
+systemctl restart $NVIDIA_SETTINGS_SERVICE.service
+echo "[INFO]: Edit /etc/$NVIDIA_SETTINGS_SERVICE.env to tweak NVIDIA GPU settings."
+echo "[INFO]: Run 'sudo systemctl restart $NVIDIA_SETTINGS_SERVICE.service' for the settings to take effect."
+
+if [ $RESET_LLAMA_SERVER_CONFIG -gt 0 ]; then
+  echo "[WARNING]: $LLAMA_SERVER_SERVICE.service was not started because the configuration was reset."
+else
+  echo "Restarting $LLAMA_SERVER_SERVICE.service..."
+  systemctl restart $LLAMA_SERVER_SERVICE.service
+fi
+echo "[INFO]: Edit /etc/$LLAMA_SERVER_SERVICE.env to specify the model file path and other settings for the llama server."
+echo "[INFO]: Run 'sudo systemctl restart $LLAMA_SERVER_SERVICE.service' for the settings to take effect."
+
 
 # Finish
-echo "Done."
-echo "Edit /etc/nvidia-settings.env to tweak NVIDIA GPU settings."
-echo "Run 'sudo systemctl restart nvidia-settings.service' for the settings to take effect."
-echo "Edit /etc/llama-server.env to specify the model and other settings."
-echo "Make sure the model file exists in /etc/models."
-echo "Run 'sudo systemctl restart llama-server.service'."
+echo "Finished."
