@@ -47,9 +47,7 @@ fi
 
 # Add --mmproj argument and value, if provided
 MMPROJ_ARG=""
-if [ -n "$MMPROJ" ]; then
-    # Do nothing
-else
+if [ ! -n "$MMPROJ" ]; then
     MMPROJ_ARG="--mmproj $MODELS_DIR/$MMPROJ"
 fi
 
