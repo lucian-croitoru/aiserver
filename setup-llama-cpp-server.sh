@@ -52,6 +52,8 @@ if test -f "/etc/$NVIDIA_SETTINGS_SERVICE.env"; then
         ;;
     esac
   done
+else
+  RESET_NVIDIA_SETTINGS_CONFIG=1
 fi
 
 # Check for existing llama-server config
@@ -74,6 +76,8 @@ if test -f "/etc/$LLAMA_SERVER_SERVICE.env"; then
         ;;
     esac
   done
+else
+  RESET_LLAMA_SERVER_CONFIG=1
 fi
 
 
