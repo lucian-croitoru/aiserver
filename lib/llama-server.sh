@@ -45,9 +45,18 @@ if [$RUNTIME != "vulkan"] && [$RUNTIME != "cuda"]; then
 fi
 
 
+# Add --mmproj argument and value, if provided
+MMPROJ_ARG=""
+if [ -n "$MMPROJ" ]; then
+    # Do nothing
+else
+    MMPROJ_ARG="--mmproj $MODELS_DIR/$MMPROJ"
+fi
+
+
 # Build command string
 SERVER_BINARY="/usr/local/llama-cpp-$RUNTIME/build/bin/llama-server"
-COMMAND="$SERVER_BINARY -m $MODELS_DIR/$MODEL --host $HOST --port $PORT -ngl 100 -fa on -c $CONTEXT_LENGTH"
+COMMAND="$SERVER_BINARY --model $MODELS_DIR/$MODEL --host $HOST --port $PORT -ngl 100 -fa on -c $CONTEXT_LENGTH $MMPROJ_ARG"
 
 # Start server
 echo "Running: $COMMAND"
