@@ -39,7 +39,7 @@ fi
 
 
 # Test for valid RUNTIME variable
-if [$RUNTIME != "vulkan"] && [$RUNTIME != "cuda"]; then
+if [ $RUNTIME != "vulkan" ] && [ $RUNTIME != "cuda" ]; then
   echo "ERROR: Invalid value for RUNTIME: '$RUNTIME'. The accepted values for RUNTIME are 'vulkan' and 'cuda'."
   exit 1
 fi
@@ -47,14 +47,14 @@ fi
 
 # Add --mmproj argument and value, if provided
 MMPROJ_ARG=""
-if [ ! -n "$MMPROJ" ]; then
+if [ -n "$MMPROJ" ]; then
     MMPROJ_ARG="--mmproj $MODELS_DIR/$MMPROJ"
 fi
 
 
 # Build command string
 SERVER_BINARY="/usr/local/llama-cpp-$RUNTIME/build/bin/llama-server"
-COMMAND="$SERVER_BINARY --model $MODELS_DIR/$MODEL --host $HOST --port $PORT -ngl 100 -fa on -c $CONTEXT_LENGTH $MMPROJ_ARG"
+COMMAND="$SERVER_BINARY --model $MODELS_DIR/$MODEL --host $HOST --port $PORT --n-gpu-layers 99 --flash-attn 1  --ubatch-size 256 --ctx-size $CONTEXT_LENGTH $MMPROJ_ARG"
 
 # Start server
 echo "Running: $COMMAND"
