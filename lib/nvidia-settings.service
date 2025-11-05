@@ -10,7 +10,7 @@ After=multi-user.target
 [Service]
 Type=oneshot
 EnvironmentFile=/etc/nvidia-settings.env
-ExecStart=/usr/local/bin/nvidia_settings.sh
+ExecStart=/usr/local/bin/nvidia-settings.sh
 RemainAfterExit=yes
 
 [Install]
