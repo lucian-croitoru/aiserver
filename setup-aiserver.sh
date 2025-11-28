@@ -12,10 +12,10 @@ set -e
 # Define global variables
 REQUIREMENTS=(wget unzip nvidia-driver-580 nvidia-cuda-toolkit nvtop cifs-utils) # TODO: check for CUDA
 
-RESET_NVIDIA_SETTINGS_CONFIG=0
+RESET_NVIDIA_UNDERCLOCK_CONFIG=0
 RESET_LLAMA_SERVER_CONFIG=0
 INSTALL_DIR="/usr/local"
-NVIDIA_SETTINGS_SERVICE="nvidia-settings"
+NVIDIA_UNDERCLOCK_SERVICE="nvidia-underclock"
 LLAMA_SERVER_SERVICE="llama-server"
 
 RELEASE="b6816"
@@ -24,7 +24,7 @@ LLAMA_CPP_CUDA="llama-$RELEASE-bin-ubuntu-x64.zip"
 
 
 # Set a log prefix for every internal `echo` command
-LOG_PREFIX="[setup-llama-cpp-server] "
+LOG_PREFIX="[setup-aiserver] "
 echo() {
   builtin echo "$LOG_PREFIX $*"
 }
@@ -32,9 +32,9 @@ echo() {
 echo "Starting..."
 echo "Checking for old installations..."
 
-# Check for existing nvidia-settings config
-if test -f "/etc/$NVIDIA_SETTINGS_SERVICE.env"; then
-  echo "WARNING: existing configuration found for [$NVIDIA_SETTINGS_SERVICE.service]"
+# Check for existing nvidia-underclock config
+if test -f "/etc/$NVIDIA_UNDERCLOCK_SERVICE.env"; then
+  echo "WARNING: existing configuration found for [$NVIDIA_UNDERCLOCK_SERVICE.service]"
   while true; do
     read -p "$LOG_PREFIX Do you want to 'keep' or 'reset'?: " response
     case $response in
@@ -44,7 +44,7 @@ if test -f "/etc/$NVIDIA_SETTINGS_SERVICE.env"; then
         ;;
       [Rr][Ee][Ss][Ee][Tt])
         # Flag reset settings
-        RESET_NVIDIA_SETTINGS_CONFIG=1
+        RESET_NVIDIA_UNDERCLOCK_CONFIG=1
         break
         ;;
       *)
@@ -53,7 +53,7 @@ if test -f "/etc/$NVIDIA_SETTINGS_SERVICE.env"; then
     esac
   done
 else
-  RESET_NVIDIA_SETTINGS_CONFIG=1
+  RESET_NVIDIA_UNDERCLOCK_CONFIG=1
 fi
 
 # Check for existing llama-server config
@@ -120,8 +120,8 @@ unzip $INSTALL_DIR/llama-cpp-cuda/$LLAMA_CPP_CUDA -d $INSTALL_DIR/llama-cpp-cuda
 
 # Setup services
 echo "Setting up services..."
-if [ $RESET_NVIDIA_SETTINGS_CONFIG -gt 0 ]; then
-  cp -f lib/$NVIDIA_SETTINGS_SERVICE.env /etc/$NVIDIA_SETTINGS_SERVICE.env
+if [ $RESET_NVIDIA_UNDERCLOCK_CONFIG -gt 0 ]; then
+  cp -f lib/$NVIDIA_UNDERCLOCK_SERVICE.env /etc/$NVIDIA_UNDERCLOCK_SERVICE.env
 fi
 
 if [ $RESET_LLAMA_SERVER_CONFIG -gt 0 ]; then
@@ -130,18 +130,18 @@ fi
 
 cp lib/*.sh $INSTALL_DIR/bin
 cp lib/*.service /etc/systemd/system
-chmod +x $INSTALL_DIR/bin/$NVIDIA_SETTINGS_SERVICE.sh
+chmod +x $INSTALL_DIR/bin/$NVIDIA_UNDERCLOCK_SERVICE.sh
 chmod +x $INSTALL_DIR/bin/$LLAMA_SERVER_SERVICE.sh
 systemctl daemon-reload
-systemctl enable $NVIDIA_SETTINGS_SERVICE.service
+systemctl enable $NVIDIA_UNDERCLOCK_SERVICE.service
 systemctl enable $LLAMA_SERVER_SERVICE.service
 
 
 # Restart services
-echo "Restarting $NVIDIA_SETTINGS_SERVICE.service..."
-systemctl restart $NVIDIA_SETTINGS_SERVICE.service
-echo "[INFO]: Edit /etc/$NVIDIA_SETTINGS_SERVICE.env to tweak NVIDIA GPU settings."
-echo "[INFO]: Run 'sudo systemctl restart $NVIDIA_SETTINGS_SERVICE.service' for the settings to take effect."
+echo "Restarting $NVIDIA_UNDERCLOCK_SERVICE.service..."
+systemctl restart $NVIDIA_UNDERCLOCK_SERVICE.service
+echo "[INFO]: Edit /etc/$NVIDIA_UNDERCLOCK_SERVICE.env to tweak NVIDIA GPU settings."
+echo "[INFO]: Run 'sudo systemctl restart $NVIDIA_UNDERCLOCK_SERVICE.service' for the settings to take effect."
 
 if [ $RESET_LLAMA_SERVER_CONFIG -gt 0 ]; then
   echo "[WARNING]: $LLAMA_SERVER_SERVICE.service was not started because the configuration was reset."
