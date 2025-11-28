@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Place this file in /usr/local/bin
-# Run `chmod + x nvidia-settings.sh` after placing the file
+# Run `chmod + x nvidia-underclock.sh` after placing the file
 # Sets global NVIDIA GPU powerlimit and clock settings
 
 # Sleep 30 seconds, wait for drivers to fully load

@@ -1,7 +1,7 @@
 # Place this file in /etc/systemd/system
 # After placing it, run:
 #  - `sudo systemctl daemon-reload`
-#  - `sudo systemctl enable nvidia-settings.service`
+#  - `sudo systemctl enable nvidia-underclock.service`
 
 [Unit]
 Description=NVIDIA Settings Configuration
@@ -9,8 +9,8 @@ After=multi-user.target
 
 [Service]
 Type=oneshot
-EnvironmentFile=/etc/nvidia-settings.env
-ExecStart=/usr/local/bin/nvidia-settings.sh
+EnvironmentFile=/etc/nvidia-underclock.env
+ExecStart=/usr/local/bin/nvidia-underclock.sh
 RemainAfterExit=yes
 
 [Install]
