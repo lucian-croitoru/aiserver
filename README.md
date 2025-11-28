@@ -5,9 +5,9 @@ This project provides a way to configure both NVIDIA GPU settings and Llama.cpp 
 ## Files
 
 ### NVIDIA Settings
-1. `nvidia-settings.sh` - The script that applies NVIDIA GPU settings
-2. `nvidia-settings.service` - Systemd service file to run the script at boot
-3. `nvidia-settings.env` - Environment file containing NVIDIA configuration values
+1. `nvidia-underclock.sh` - The script that applies NVIDIA GPU settings
+2. `nvidia-underclock.service` - Systemd service file to run the script at boot
+3. `nvidia-underclock.env` - Environment file containing NVIDIA configuration values
 
 ### Llama Server
 4. `llama-server.sh` - The script that starts the Llama.cpp server
@@ -34,6 +34,7 @@ The Llama server script uses the following environment variables:
 - `HOST` - Host address (default: 0.0.0.0)
 - `PORT` - Port number (default: 8080)
 - `MODELS_DIR` - Local models directory (default: /etc/models)
+- `MMPROJ` - (Optional): .mmproj file name (default: (empty))
 
 ## Llama Server Features
 
@@ -48,7 +49,7 @@ The Llama server script uses the following environment variables:
 
 ## Installation
 
-Run `chmod +x setup-llama-cpp-server`
-Modify the `nvidia-settings.env` and / or `llama-server.env` files in `/etc` with your desired values.
+Run `chmod +x setup-aiserver`
+Modify the `nvidia-underclock.env` and / or `llama-server.env` files in `/etc` with your desired values.
 Ensure that the model file (`MODEL`) specified in `llama-server.env` exists in the `MODELS_DIR` directory.
 After installation, both services will automatically apply their respective settings at boot time.
