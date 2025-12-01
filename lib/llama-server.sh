@@ -54,7 +54,7 @@ fi
 
 # Build command string
 SERVER_BINARY="/usr/local/llama-cpp-$RUNTIME/build/bin/llama-server"
-COMMAND="$SERVER_BINARY --model $MODELS_DIR/$MODEL --host $HOST --port $PORT --n-gpu-layers 99 --flash-attn 1  --ubatch-size 256 --ctx-size $CONTEXT_LENGTH $MMPROJ_ARG"
+COMMAND="$SERVER_BINARY --model $MODELS_DIR/$MODEL --host $HOST --port $PORT --n-gpu-layers 99 --flash-attn 1  --ubatch-size 256 --ctx-size $CONTEXT_LENGTH $MMPROJ_ARG $EXTRA_ARGS"
 
 # Start server
 echo "Running: $COMMAND"
