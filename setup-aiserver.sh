@@ -18,7 +18,7 @@ INSTALL_DIR="/usr/local"
 NVIDIA_UNDERCLOCK_SERVICE="nvidia-underclock"
 LLAMA_SERVER_SERVICE="llama-server"
 
-RELEASE="b6816"
+RELEASE="b7211"
 LLAMA_CPP_VULKAN="llama-$RELEASE-bin-ubuntu-vulkan-x64.zip"
 LLAMA_CPP_CUDA="llama-$RELEASE-bin-ubuntu-x64.zip"
 
