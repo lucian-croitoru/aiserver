@@ -1,2 +1,5 @@
 __notes.txt
 *.zip
+.venv
+base.png
+refined.png
