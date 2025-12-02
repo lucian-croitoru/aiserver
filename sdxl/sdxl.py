@@ -32,7 +32,7 @@ base = StableDiffusionXLPipeline.from_pretrained(
     variant="fp16",
     use_safetensors=True,
     torch_dtype=torch.float16,
-).to("cuda:0")
+).to("cuda:2")
 
 base.enable_attention_slicing()
 base.enable_vae_slicing()
@@ -61,7 +61,7 @@ refiner = StableDiffusionXLImg2ImgPipeline.from_pretrained(
     variant="fp16",
     use_safetensors=True,
     torch_dtype=torch.float16,
-).to("cuda:1")
+).to("cuda:2")
 
 refiner.enable_attention_slicing()
 refiner.enable_vae_slicing()
