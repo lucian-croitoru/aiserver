@@ -1,4 +1,5 @@
 __notes.txt
+__pycache__
 *.zip
 .venv
 base.png
