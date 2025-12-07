@@ -1,7 +1,10 @@
 import uvicorn
-from sdxl.sdxl_app import app
+from sdxl.models import init_models
+from sdxl.app import app
+
 
 if __name__ == "__main__":
+    init_models()
     uvicorn.run(
         app,
         host="0.0.0.0",
