@@ -10,7 +10,7 @@
 set -e
 
 # Define global variables
-REQUIREMENTS=(wget unzip nvidia-driver-580 nvidia-cuda-toolkit nvtop cifs-utils) # TODO: check for CUDA
+REQUIREMENTS=(wget nvidia-driver-580 nvidia-cuda-toolkit nvtop cifs-utils)
 
 RESET_NVIDIA_UNDERCLOCK_CONFIG=0
 RESET_LLAMA_SERVER_CONFIG=0
@@ -18,9 +18,8 @@ INSTALL_DIR="/usr/local"
 NVIDIA_UNDERCLOCK_SERVICE="nvidia-underclock"
 LLAMA_SERVER_SERVICE="llama-server"
 
-RELEASE="b7211"
-LLAMA_CPP_VULKAN="llama-$RELEASE-bin-ubuntu-vulkan-x64.zip"
-LLAMA_CPP_CUDA="llama-$RELEASE-bin-ubuntu-x64.zip"
+RELEASE="b9284"
+LLAMA_CPP_VULKAN="llama-$RELEASE-bin-ubuntu-vulkan-x64.tar.gz"
 
 
 # Set a log prefix for every internal `echo` command
@@ -104,19 +103,13 @@ fi
 # Cleanup folders
 echo "Installing $LLAMA_SERVER_SERVICE..."
 rm -rf $INSTALL_DIR/llama-cpp-vulkan
-rm -rf $INSTALL_DIR/llama-cpp-cuda
 mkdir $INSTALL_DIR/llama-cpp-vulkan
-mkdir $INSTALL_DIR/llama-cpp-cuda
 
 # Download release
 echo "Downloading Vulkan release..."
 wget -O $INSTALL_DIR/llama-cpp-vulkan/$LLAMA_CPP_VULKAN "https://github.com/ggml-org/llama.cpp/releases/download/$RELEASE/$LLAMA_CPP_VULKAN"
-unzip $INSTALL_DIR/llama-cpp-vulkan/$LLAMA_CPP_VULKAN -d $INSTALL_DIR/llama-cpp-vulkan
-
-echo "Downloading CUDA release..."
-wget -O $INSTALL_DIR/llama-cpp-cuda/$LLAMA_CPP_CUDA "https://github.com/ggml-org/llama.cpp/releases/download/$RELEASE/$LLAMA_CPP_CUDA"
-unzip $INSTALL_DIR/llama-cpp-cuda/$LLAMA_CPP_CUDA -d $INSTALL_DIR/llama-cpp-cuda
-
+tar -xzvf $INSTALL_DIR/llama-cpp-vulkan/$LLAMA_CPP_VULKAN -C $INSTALL_DIR/llama-cpp-vulkan
+mv $INSTALL_DIR/llama-cpp-vulkan/llama-$RELEASE $INSTALL_DIR/llama-cpp-vulkan/bin
 
 # Setup services
 echo "Setting up services..."

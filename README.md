@@ -28,7 +28,6 @@ The script will only execute commands for variables that are set and non-empty. 
 
 The Llama server script uses the following environment variables:
 
-- `RUNTIME` - Runtime type (either 'vulkan' or 'cuda')
 - `MODEL` - Model file name (default: (empty))
 - `CONTEXT_LENGTH` - Context length (default: 4096)
 - `HOST` - Host address (default: 0.0.0.0)
@@ -38,12 +37,10 @@ The Llama server script uses the following environment variables:
 
 ## Llama Server Features
 
-- **Runtime selection**: Supports both 'vulkan' and 'cuda' runtimes
 - **Flexible configuration**: All server parameters can be customized via environment variables
 - **Default values**: Safe defaults are provided for all parameters
 - **Environment file support**: Configuration loaded from external .env files
 - **Model validation**: Checks if the specified model file exists before starting the server
-- **Runtime validation**: Ensures the RUNTIME variable is set to either 'vulkan' or 'cuda'
 - **Required variables**: All configuration variables must be set and non-empty
 
 
@@ -53,3 +50,46 @@ Run `chmod +x setup-aiserver`
 Modify the `nvidia-underclock.env` and / or `llama-server.env` files in `/etc` with your desired values.
 Ensure that the model file (`MODEL`) specified in `llama-server.env` exists in the `MODELS_DIR` directory.
 After installation, both services will automatically apply their respective settings at boot time.
+
+### Other notes
+In `/etc/fstab` add `//[SERVER_NAME]/[SHARE_NAME] /mnt/models cifs guest` as a SMB share to copy models from
+
+### Example manual run commands
+
+`cd /usr/local/llama-cpp-vulkan/bin`
+
+~~~
+./llama-server \
+--device Vulkan2,Vulkan3 \
+--model /etc/models/Qwen2.5-Coder-14B-Instruct-Q8_0.gguf \
+--port 8080 \
+--ctx-size 32000 \
+--n-gpu-layers 99 \
+--flash-attn 1 \
+--ubatch-size 256 \
+--no-mmap \
+--split-mode row \
+--no-mmap
+~~~
+
+~~~
+./llama-server \
+--device Vulkan0,Vulkan1 \
+--model /models/35b/Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf \
+--mmproj /models/35b/Qwen3.6-35B-A3B-mmproj-F16.gguf \
+--port 8080 \
+--ctx-size 400000 \
+--n-gpu-layers 99 \
+--flash-attn 1 \
+--ubatch-size 256 \
+--no-mmap \
+--split-mode row \
+--n-cpu-moe 2 \
+--threads 8 \
+--threads-batch 8 \ 
+--numa distribute \
+--rope-scaling yarn \
+--rope-scale 2 \
+--yarn-orig-ctx 262144 \ 
+--override-kv qwen35moe.context_length=int:400000
+~~~
