@@ -10,16 +10,13 @@
 set -e
 
 # Define global variables
-REQUIREMENTS=(wget nvidia-driver-580 nvidia-cuda-toolkit nvtop cifs-utils)
+REQUIREMENTS=(wget nvidia-driver-580 nvidia-cuda-toolkit nvtop cifs-utils cmake build-essential libnccl-dev libssl-dev)
 
 RESET_NVIDIA_UNDERCLOCK_CONFIG=0
 RESET_LLAMA_SERVER_CONFIG=0
 INSTALL_DIR="/usr/local"
 NVIDIA_UNDERCLOCK_SERVICE="nvidia-underclock"
 LLAMA_SERVER_SERVICE="llama-server"
-
-RELEASE="b9284"
-LLAMA_CPP_VULKAN="llama-$RELEASE-bin-ubuntu-vulkan-x64.tar.gz"
 
 
 # Set a log prefix for every internal `echo` command
@@ -102,14 +99,26 @@ fi
 
 # Cleanup folders
 echo "Installing $LLAMA_SERVER_SERVICE..."
-rm -rf $INSTALL_DIR/llama-cpp-vulkan
-mkdir $INSTALL_DIR/llama-cpp-vulkan
+rm -rf $INSTALL_DIR/llama.cpp
+cd $INSTALL_DIR
 
 # Download release
-echo "Downloading Vulkan release..."
-wget -O $INSTALL_DIR/llama-cpp-vulkan/$LLAMA_CPP_VULKAN "https://github.com/ggml-org/llama.cpp/releases/download/$RELEASE/$LLAMA_CPP_VULKAN"
-tar -xzvf $INSTALL_DIR/llama-cpp-vulkan/$LLAMA_CPP_VULKAN -C $INSTALL_DIR/llama-cpp-vulkan
-mv $INSTALL_DIR/llama-cpp-vulkan/llama-$RELEASE $INSTALL_DIR/llama-cpp-vulkan/bin
+echo "Downloading latest release..."
+git clone https://github.com/ggml-org/llama.cpp.git
+cd $INSTALL_DIR/llama.cpp
+
+echo "Compiling..."
+cmake -B build \
+  -DGGML_CUDA=ON \
+  -DGGML_NCCL=ON \
+  -DGGML_CUDA_P2P=ON
+
+echo "Done."
+
+echo "Building..."
+cmake --build build -j
+echo "Done."
+
 
 # Setup services
 echo "Setting up services..."
