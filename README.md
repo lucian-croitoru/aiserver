@@ -26,70 +26,45 @@ The script will only execute commands for variables that are set and non-empty. 
 
 ## Llama Server Environment Variables
 
-The Llama server script uses the following environment variables:
+The Llama server script a single `LLAMA_SERVER_ARGS` variable in `/etc/llama-server.env` to pass all arguments for `llama.cpp`'s `llama-server`. Other `lama-server` environment variables can also be written. 
 
-- `MODEL` - Model file name (default: (empty))
-- `CONTEXT_LENGTH` - Context length (default: 4096)
-- `HOST` - Host address (default: 0.0.0.0)
-- `PORT` - Port number (default: 8080)
-- `MODELS_DIR` - Local models directory (default: /etc/models)
-- `MMPROJ` - (Optional): .mmproj file name (default: (empty))
+### Example args for llama-server.env
+~~~
+# DGGML_CUDA_FORCE_MMQ=1
+# DGGML_CUDA_FORCE_CUBLAS=1
+GGML_CUDA_ENABLE_UNIFIED_MEMORY=1
+CUDA_VISIBLE_DEVICES=0,1
 
-## Llama Server Features
-
-- **Flexible configuration**: All server parameters can be customized via environment variables
-- **Default values**: Safe defaults are provided for all parameters
-- **Environment file support**: Configuration loaded from external .env files
-- **Model validation**: Checks if the specified model file exists before starting the server
-- **Required variables**: All configuration variables must be set and non-empty
-
+LLAMA_SERVER_ARGS="-m /etc/models/Qwen3.6-35B-A3B-UD-Q8_K_XL_MTP.gguf \
+  --mmproj /etc/models/Qwen3.6-35B-A3B-mmproj-F16.gguf \
+  -ngl 999 \
+  -sm layer \
+  -ts 1,1 \
+  -fa on \
+  --no-mmap \
+  --host 0.0.0.0 \
+  --port 8111 \
+  -ctk q8_0 \
+  -ctv q8_0 \
+  --ctx-size 262144 \
+  --cont-batching \
+  --threads 4 \
+  --threads-batch 4 \
+  --spec-type draft-mtp,ngram-mod \
+  --spec-draft-n-max 2 \
+  --temp 0.6 \
+  --top-p 0.9 \
+  -b 1024 \
+  -ub 256 \
+  --repeat-penalty 1.05 \
+  --presence-penalty 1.3"
+~~~
 
 ## Installation
 
 Run `chmod +x setup-aiserver`
 Modify the `nvidia-underclock.env` and / or `llama-server.env` files in `/etc` with your desired values.
-Ensure that the model file (`MODEL`) specified in `llama-server.env` exists in the `MODELS_DIR` directory.
 After installation, both services will automatically apply their respective settings at boot time.
 
 ### Other notes
 In `/etc/fstab` add `//[SERVER_NAME]/[SHARE_NAME] /mnt/models cifs guest` as a SMB share to copy models from
-
-### Example manual run commands
-
-`cd /usr/local/llama-cpp-vulkan/bin`
-
-~~~
-./llama-server \
---device Vulkan2,Vulkan3 \
---model /etc/models/Qwen2.5-Coder-14B-Instruct-Q8_0.gguf \
---port 8080 \
---ctx-size 32000 \
---n-gpu-layers 99 \
---flash-attn 1 \
---ubatch-size 256 \
---no-mmap \
---split-mode row \
---no-mmap
-~~~
-
-~~~
-./llama-server \
---device Vulkan0,Vulkan1 \
---model /models/35b/Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf \
---mmproj /models/35b/Qwen3.6-35B-A3B-mmproj-F16.gguf \
---port 8080 \
---ctx-size 400000 \
---n-gpu-layers 99 \
---flash-attn 1 \
---ubatch-size 256 \
---no-mmap \
---split-mode row \
---n-cpu-moe 2 \
---threads 8 \
---threads-batch 8 \ 
---numa distribute \
---rope-scaling yarn \
---rope-scale 2 \
---yarn-orig-ctx 262144 \ 
---override-kv qwen35moe.context_length=int:400000
-~~~
