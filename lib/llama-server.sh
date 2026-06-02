@@ -7,7 +7,7 @@
 
 # Build command string
 SERVER_BINARY="/usr/local/llama.cpp/build/bin/llama-server"
-COMMAND="$SERVER_BINARY $LLAMA_SERVER_ARGS
+COMMAND="$SERVER_BINARY $LLAMA_SERVER_ARGS"
 
 # Start server
 echo "Running: $COMMAND"
