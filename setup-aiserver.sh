@@ -10,7 +10,7 @@
 set -e
 
 # Define global variables
-REQUIREMENTS=(wget nvidia-driver-580 nvidia-cuda-toolkit nvtop cifs-utils cmake build-essential libnccl-dev libssl-dev)
+apt install wget nvidia-driver-580 nvidia-cuda-toolkit nvtop cifs-utils cmake build-essential libnccl-dev libssl-dev
 
 RESET_NVIDIA_UNDERCLOCK_CONFIG=0
 RESET_LLAMA_SERVER_CONFIG=0
@@ -77,16 +77,6 @@ else
 fi
 
 
-# Install minimal requirements
-echo "Checking requirements..."
-for pkg in "${REQUIREMENTS[@]}"; do
-    if [ ! dpkg -s "$pkg" &>/dev/null ]; then
-        echo "Installing required package: $pkg"
-        apt-get install -y "$pkg"
-    fi
-done
-
-
 ### Install llama.cpp
 # Stop service if running
 if systemctl cat "$LLAMA_SERVER_SERVICE.service" &>/dev/null; then
@@ -123,15 +113,15 @@ echo "Done."
 # Setup services
 echo "Setting up services..."
 if [ $RESET_NVIDIA_UNDERCLOCK_CONFIG -gt 0 ]; then
-  cp -f lib/$NVIDIA_UNDERCLOCK_SERVICE.env /etc/$NVIDIA_UNDERCLOCK_SERVICE.env
+  cp -f $PWD/lib/$NVIDIA_UNDERCLOCK_SERVICE.env /etc/$NVIDIA_UNDERCLOCK_SERVICE.env
 fi
 
 if [ $RESET_LLAMA_SERVER_CONFIG -gt 0 ]; then
-  cp -f lib/$LLAMA_SERVER_SERVICE.env /etc/$LLAMA_SERVER_SERVICE.env
+  cp -f $PWD/lib/$LLAMA_SERVER_SERVICE.env /etc/$LLAMA_SERVER_SERVICE.env
 fi
 
-cp lib/*.sh $INSTALL_DIR/bin
-cp lib/*.service /etc/systemd/system
+cp $PWD/lib/*.sh $INSTALL_DIR/bin
+cp $PWD/lib/*.service /etc/systemd/system
 chmod +x $INSTALL_DIR/bin/$NVIDIA_UNDERCLOCK_SERVICE.sh
 chmod +x $INSTALL_DIR/bin/$LLAMA_SERVER_SERVICE.sh
 systemctl daemon-reload
