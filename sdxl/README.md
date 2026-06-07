@@ -20,7 +20,7 @@ POST /v1/images/generations
 **Request Body:**
 ```json
 {
-  "prompt": "A character portrait of a bearded warrior from a RPG / D&D style game, armed with a greatsword. Style: detailed, fine pencil illustration with dynamic lighting. The character is facing forward, having a determined, slightly angry face, and wearing armor.",
+  "prompt": "A character portrait of a bearded warrior from a RPG / D&D style game. Style: detailed, fine pencil illustration with dynamic lighting. The character is facing forward, having a determined, slightly angry face, and wearing armor.",
   "negative_prompt": "blurry, low quality, deformed, text, watermark",
   "width": 1024,
   "height": 768,
@@ -66,15 +66,15 @@ pip install -r requirements.txt
 python sdxl/sdxl_server.py
 ```
 
-The server will start on `http://0.0.0.0:8008`
+The server will start on `http://0.0.0.0:8113`
 
 ## Usage Example
 
 ```bash
-curl -X POST "http://localhost:8008/v1/images/generations" \
+curl -X POST "http://localhost:8113/v1/images/generations" \
   -H "Content-Type: application/json" \
   -d '{
-    "prompt": "A futuristic cityscape at sunset",
+    "prompt": "A character portrait of a RPG game bearded warrior with a stern expression. Grayscale pencil sketch.",
     "width": 1024,
     "height": 768
   }'

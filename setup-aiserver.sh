@@ -10,16 +10,13 @@
 set -e
 
 # Define global variables
-REQUIREMENTS=(wget nvidia-driver-580 nvidia-cuda-toolkit nvtop cifs-utils)
+apt install wget nvidia-driver-580 nvidia-cuda-toolkit nvtop cifs-utils cmake build-essential libnccl-dev libssl-dev python3-pip python3-dev python3-venv
 
 RESET_NVIDIA_UNDERCLOCK_CONFIG=0
 RESET_LLAMA_SERVER_CONFIG=0
 INSTALL_DIR="/usr/local"
 NVIDIA_UNDERCLOCK_SERVICE="nvidia-underclock"
 LLAMA_SERVER_SERVICE="llama-server"
-
-RELEASE="b9284"
-LLAMA_CPP_VULKAN="llama-$RELEASE-bin-ubuntu-vulkan-x64.tar.gz"
 
 
 # Set a log prefix for every internal `echo` command
@@ -80,16 +77,6 @@ else
 fi
 
 
-# Install minimal requirements
-echo "Checking requirements..."
-for pkg in "${REQUIREMENTS[@]}"; do
-    if [ ! dpkg -s "$pkg" &>/dev/null ]; then
-        echo "Installing required package: $pkg"
-        apt-get install -y "$pkg"
-    fi
-done
-
-
 ### Install llama.cpp
 # Stop service if running
 if systemctl cat "$LLAMA_SERVER_SERVICE.service" &>/dev/null; then
@@ -102,27 +89,39 @@ fi
 
 # Cleanup folders
 echo "Installing $LLAMA_SERVER_SERVICE..."
-rm -rf $INSTALL_DIR/llama-cpp-vulkan
-mkdir $INSTALL_DIR/llama-cpp-vulkan
+rm -rf $INSTALL_DIR/llama.cpp
+cd $INSTALL_DIR
 
 # Download release
-echo "Downloading Vulkan release..."
-wget -O $INSTALL_DIR/llama-cpp-vulkan/$LLAMA_CPP_VULKAN "https://github.com/ggml-org/llama.cpp/releases/download/$RELEASE/$LLAMA_CPP_VULKAN"
-tar -xzvf $INSTALL_DIR/llama-cpp-vulkan/$LLAMA_CPP_VULKAN -C $INSTALL_DIR/llama-cpp-vulkan
-mv $INSTALL_DIR/llama-cpp-vulkan/llama-$RELEASE $INSTALL_DIR/llama-cpp-vulkan/bin
+echo "Downloading latest release..."
+git clone https://github.com/ggml-org/llama.cpp.git
+cd $INSTALL_DIR/llama.cpp
+
+echo "Compiling..."
+cmake -B build \
+  -DGGML_CUDA=ON \
+  -DGGML_NCCL=ON \
+  -DGGML_CUDA_P2P=ON
+
+echo "Done."
+
+echo "Building..."
+cmake --build build -j
+echo "Done."
+
 
 # Setup services
 echo "Setting up services..."
 if [ $RESET_NVIDIA_UNDERCLOCK_CONFIG -gt 0 ]; then
-  cp -f lib/$NVIDIA_UNDERCLOCK_SERVICE.env /etc/$NVIDIA_UNDERCLOCK_SERVICE.env
+  cp -f $PWD/lib/$NVIDIA_UNDERCLOCK_SERVICE.env /etc/$NVIDIA_UNDERCLOCK_SERVICE.env
 fi
 
 if [ $RESET_LLAMA_SERVER_CONFIG -gt 0 ]; then
-  cp -f lib/$LLAMA_SERVER_SERVICE.env /etc/$LLAMA_SERVER_SERVICE.env
+  cp -f $PWD/lib/$LLAMA_SERVER_SERVICE.env /etc/$LLAMA_SERVER_SERVICE.env
 fi
 
-cp lib/*.sh $INSTALL_DIR/bin
-cp lib/*.service /etc/systemd/system
+cp $PWD/lib/*.sh $INSTALL_DIR/bin
+cp $PWD/lib/*.service /etc/systemd/system
 chmod +x $INSTALL_DIR/bin/$NVIDIA_UNDERCLOCK_SERVICE.sh
 chmod +x $INSTALL_DIR/bin/$LLAMA_SERVER_SERVICE.sh
 systemctl daemon-reload
