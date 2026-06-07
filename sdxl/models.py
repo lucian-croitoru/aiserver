@@ -1,22 +1,27 @@
 
 from diffusers import (StableDiffusionXLPipeline,
-                       StableDiffusionXLImg2ImgPipeline,
-                       StableDiffusionLatentUpscalePipeline)
+                       StableDiffusionXLImg2ImgPipeline)
 import random
 import torch
 import logging
+import cv2
+import numpy as np
+from PIL import Image
 
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 SDXL_MODEL_BASE = "stabilityai/stable-diffusion-xl-base-1.0"
 SDXL_MODEL_REFINER = "stabilityai/stable-diffusion-xl-refiner-1.0"
 SDXL_MODEL_UPSCALER = "stabilityai/stable-diffusion-x4-upscaler"
+SDXL_MODEL_INPAINT = "diffusers/stable-diffusion-xl-1.0-inpainting-0.1"
 
 MAX_SEED = 2**32 - 1
 WIDTH = 1024
 HEIGHT = 768
-GUIDANCE = 7.0
-STEPS_BASE = 40
-STEPS_REFINER = 40
+GUIDANCE = 7
+STEPS_BASE = 20
+STEPS_REFINER = 20
 
 NEGATIVE_PROMPT = "blurry, low quality, deformed, text, watermark"
 
@@ -41,8 +46,8 @@ class ModelLoader:
     def optimize_model(self):
         if self.MODEL:
             self.MODEL[0].enable_attention_slicing()
-            self.MODEL[0].enable_vae_slicing()
-            self.MODEL[0].enable_xformers_memory_efficient_attention()
+            self.MODEL[0].vae.enable_slicing()
+            self.MODEL[0].enable_xformers_memory_efficient_attention() # transformers >=5.x: works on Ampere and more recent GPUs
 
 
 class SDXLBase(ModelLoader):
@@ -62,26 +67,9 @@ class SDXLBase(ModelLoader):
         return model
 
 
-class SDXLEditor(ModelLoader):
-    # 7.5 GB at fp16
-    DESTINATION = "cuda:3"
-    MODEL = []
-
-    def __init__(self):
-        super().__init__()
-
-    def init_model(self):
-        model = StableDiffusionXLImg2ImgPipeline.from_pretrained(
-            SDXL_MODEL_BASE,
-            variant="fp16",
-            use_safetensors=True,
-            torch_dtype=torch.float16)
-        return model
-
-
 class SDXLRefiner(ModelLoader):
     # 6.5 GB at fp16
-    DESTINATION = "cuda:1"
+    DESTINATION = "cuda:3"
     MODEL = []
 
     def __init__(self):
@@ -96,29 +84,25 @@ class SDXLRefiner(ModelLoader):
         return model
 
 
-class SDXLUpscaler(ModelLoader):
-    # 2.4 GB at fp16
-    DESTINATION = "cuda:0"
-    MODEL = []
-
-    def __init__(self):
-        super().__init__()
-
-    def init_model(self):
-        model = StableDiffusionLatentUpscalePipeline.from_pretrained(
-            SDXL_MODEL_UPSCALER,
-            variant="fp16",
-            use_safetensors=True,
-            torch_dtype=torch.float16)
-        return model
-
 
 def init_models():
     # Just init the models as they are singletons
     SDXLBase()
-    SDXLEditor()
     SDXLRefiner()
-    SDXLUpscaler()
+
+
+def upscale_image(image, scale=2):
+    if not isinstance(image, Image.Image):
+        raise TypeError(f"Expected PIL image, got {type(image)}")
+    img = np.array(image)
+    up = cv2.resize(
+        img,
+        None,
+        fx=scale,
+        fy=scale,
+        interpolation=cv2.INTER_LANCZOS4
+    )
+    return Image.fromarray(up)
 
 
 def generate_image(prompt: str,
@@ -148,15 +132,20 @@ def generate_image(prompt: str,
         generator=generator
     ).images[0]
     base_image.save("base.png")
-    
-    print("Refining image details...")
-    final_image = refiner_model(
+ 
+    logger.info("Refining image details...")
+    refined_image = refiner_model(
         prompt=prompt,
         negative_prompt=negative_prompt,
         image=base_image,
         guidance_scale=guidance_scale,
         num_inference_steps=STEPS_REFINER,
+        strength=0.45
     ).images[0]
-    final_image.save("refined.png")
-    
-    return final_image
+    refined_image.save("refined.png")
+ 
+    logger.info("Upscaling...")
+    upscaled_image = upscale_image(refined_image, 2)
+    upscaled_image.save("upscaled.png")
+
+    return upscaled_image
