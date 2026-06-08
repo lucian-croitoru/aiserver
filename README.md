@@ -48,16 +48,55 @@ LLAMA_SERVER_ARGS="-m /etc/models/Qwen3.6-35B-A3B-UD-Q8_K_XL_MTP.gguf \
   -ctv q8_0 \
   --ctx-size 262144 \
   --cont-batching \
-  --threads 4 \
-  --threads-batch 4 \
+  --threads 2 \
+  --threads-batch 2 \
   --spec-type draft-mtp,ngram-mod \
   --spec-draft-n-max 2 \
-  --temp 0.6 \
-  --top-p 0.9 \
   -b 1024 \
   -ub 256 \
+  --temp 0.45 \
+  --top-p 0.90 \
+  --top-k 40 \
+  --presence-penalty 0.60 \
   --repeat-penalty 1.05 \
-  --presence-penalty 1.3"
+  --reasoning-budget 16384
+  "
+~~~
+
+
+~~~
+# DGGML_CUDA_FORCE_MMQ=1
+# DGGML_CUDA_FORCE_CUBLAS=1
+# GGML_CUDA_ENABLE_UNIFIED_MEMORY=1
+CUDA_VISIBLE_DEVICES=2,3
+
+LLAMA_SERVER_ARGS="-m /etc/models/Qwen3.5-9B-UD-Q8_K_XL_MTP.gguf \
+  --mmproj /etc/models/Qwen3.5-9B-mmproj-F16.gguf \
+  -ngl 999 \
+  -sm layer \
+  -ts 14,10 \
+  -fa on \
+  --no-mmap \
+  --host 0.0.0.0 \
+  --port 8112 \
+  -ctk q8_0 \
+  -ctv q8_0 \
+  --ctx-size 262144 \
+  --cont-batching \
+  --parallel 2 \
+  --threads 2 \
+  --threads-batch 2 \
+  --spec-type draft-mtp,ngram-mod \
+  --spec-draft-n-max 2 \
+  -b 1024 \
+  -ub 256 \
+  --temp 0.25 \
+  --top-p 0.85 \
+  --top-k 30 \
+  --presence-penalty 0.20 \
+  --repeat-penalty 1.10 \
+  --reasoning-budget 8192
+  "
 ~~~
 
 ## Installation
