@@ -186,77 +186,244 @@ async def call_model(
     semaphore: asyncio.Semaphore,
     model_name: str,
     stream: bool,
-    endpoint: str="/chat/completions",
+    endpoint: str = "/chat/completions",
     **parameters,
-    
 ):
     """
     Send one request to llama-server.
 
-    The semaphore is held for the entire inference request.
+    Non-streaming requests are fully read by httpx and returned
+    as a normal Response.
 
-    This means that if, for example:
-
-        WORKER_CONCURRENCY = 2
-
-    then at most two WORKER requests are actively being processed
-    at once. Additional requests wait here.
+    Streaming requests are handled separately by stream_model().
     """
 
-    async with semaphore:
+    # --------------------------------------------------------
+    # Non-streaming request
+    # --------------------------------------------------------
+
+    if not stream:
+
+        async with semaphore:
+
+            logger.debug(
+                "%s inference slot acquired",
+                model_name,
+            )
+
+            url = (
+                base_url.rstrip("/")
+                + endpoint
+            )
+
+            payload = {
+                "model": model,
+                "messages": messages,
+                "stream": False,
+            }
+
+            # Preserve all OpenAI-compatible generation parameters.
+            payload.update({
+                key: value
+                for key, value in parameters.items()
+                if value is not None
+            })
+
+            start = time.perf_counter()
+
+            try:
+
+                response = await get_client(request).post(
+                    url,
+                    json=payload,
+                    timeout=INFERENCE_TIMEOUT,
+                )
+
+                elapsed = (
+                    time.perf_counter() - start
+                )
+
+                logger.debug(
+                    "%s request completed in %.3fs",
+                    model_name,
+                    elapsed,
+                )
+
+                return response
+
+            finally:
+
+                logger.debug(
+                    "%s inference slot released",
+                    model_name,
+                )
+
+
+# ============================================================
+# Streaming llama-server request
+# ============================================================
+
+async def stream_model(
+    request: Request,
+    base_url: str,
+    model: str,
+    messages: list,
+    *,
+    semaphore: asyncio.Semaphore,
+    model_name: str,
+    endpoint: str = "/chat/completions",
+    **parameters,
+):
+    """
+    Open a streaming request to llama-server.
+
+    IMPORTANT:
+
+    httpx.AsyncClient.post() is deliberately NOT used here.
+
+    Instead, we create and send an httpx request with
+    stream=True. This causes httpx to return as soon as the
+    downstream response headers are available, without reading
+    the response body.
+
+    The returned response therefore remains connected to the
+    llama-server stream.
+
+    The inference semaphore is intentionally acquired here and
+    remains held until the caller has received the entire
+    downstream stream or disconnects.
+    """
+
+    await semaphore.acquire()
+
+    logger.debug(
+        "%s streaming inference slot acquired",
+        model_name,
+    )
+
+    url = (
+        base_url.rstrip("/")
+        + endpoint
+    )
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "stream": True,
+    }
+
+    # Preserve all OpenAI-compatible generation parameters.
+    payload.update({
+        key: value
+        for key, value in parameters.items()
+        if value is not None
+    })
+
+    client = get_client(request)
+
+    start = time.perf_counter()
+
+    try:
+
+        downstream_request = client.build_request(
+            "POST",
+            url,
+            json=payload,
+        )
+
+        # ----------------------------------------------------
+        # CRITICAL:
+        #
+        # stream=True means the response body is NOT buffered.
+        # httpx returns once the downstream response headers
+        # arrive, leaving the body open for aiter_bytes().
+        # ----------------------------------------------------
+
+        response = await client.send(
+            downstream_request,
+            stream=True,
+        )
+
+        elapsed = (
+            time.perf_counter() - start
+        )
 
         logger.debug(
-            "%s inference slot acquired",
+            "%s streaming connection established in %.3fs",
             model_name,
+            elapsed,
         )
-
-        url = (
-            base_url.rstrip("/")
-            + endpoint
-        )
-
-        payload = {
-            "model": model,
-            "messages": messages,
-            "stream": stream,
-        }
-
-
-        # Preserve all OpenAI-compatible generation parameters.
-        payload.update({
-            key: value
-            for key, value in parameters.items()
-            if value is not None
-        })
-
-        start = time.perf_counter()
 
         try:
 
-            response = await get_client(request).post(
-                url,
-                json=payload,
-                timeout=INFERENCE_TIMEOUT,
-            )
+            response.raise_for_status()
 
-            elapsed = (
-                time.perf_counter() - start
-            )
+        except Exception:
 
-            logger.debug(
-                "%s request completed in %.3fs",
-                model_name,
-                elapsed,
-            )
+            # We own this response because stream=True was used.
+            await response.aclose()
 
-            return response
+            raise
 
-        finally:
+        return response
 
-            logger.debug(
-                "%s inference slot released",
-                model_name,
-            )
+    except BaseException:
+
+        # The response was never successfully handed to the
+        # StreamingResponse generator, so release the slot here.
+        semaphore.release()
+
+        logger.debug(
+            "%s streaming inference slot released "
+            "before streaming started",
+            model_name,
+        )
+
+        raise
+
+
+async def forward_stream(
+    response: httpx.Response,
+    *,
+    semaphore: asyncio.Semaphore,
+    model_name: str,
+):
+    """
+    Transparently forward bytes from llama-server to the caller.
+
+    No parsing, buffering, transformation, or reconstruction of
+    SSE messages is performed.
+
+    Whatever bytes llama-server sends are yielded directly to
+    FastAPI, which sends them to the caller.
+    """
+
+    try:
+
+        async for chunk in response.aiter_bytes():
+
+            if chunk:
+                yield chunk
+
+    except asyncio.CancelledError:
+
+        logger.debug(
+            "%s streaming request cancelled by caller",
+            model_name,
+        )
+
+        raise
+
+    finally:
+
+        await response.aclose()
+
+        semaphore.release()
+
+        logger.debug(
+            "%s streaming inference slot released",
+            model_name,
+        )
 
 
 # ============================================================
@@ -273,10 +440,12 @@ async def classify(
             "role": "system",
             "content": TRIAGER_SYSTEM_PROMPT,
         },
-       *[msg for msg in messages if msg.get("role") == "user"]
-
+        *[
+            msg
+            for msg in messages
+            if msg.get("role") == "user"
+        ],
     ]
-
 
     response = await call_model(
         request,
@@ -290,6 +459,7 @@ async def classify(
     )
 
     response.raise_for_status()
+
     data = response.json()
 
     content = (
@@ -339,8 +509,8 @@ async def forward_response(
     input_tokens: int,
 ):
     """
-    Convert llama-server's response into an OpenAI-compatible
-    FastAPI response.
+    Convert llama-server's non-streaming response into an
+    OpenAI-compatible FastAPI response.
     """
 
     if response.is_error:
@@ -459,21 +629,24 @@ async def chat_completions(
                 route,
             )
 
-            response = await call_model(
-                request,
-                BRAIN_URL,
-                BRAIN_MODEL,
-                messages,
-                semaphore=brain_semaphore,
-                model_name=BRAIN_MODEL,
-                stream=stream,
-                **generation_parameters,
-            )
-
             if stream:
 
+                response = await stream_model(
+                    request,
+                    BRAIN_URL,
+                    BRAIN_MODEL,
+                    messages,
+                    semaphore=brain_semaphore,
+                    model_name=BRAIN_MODEL,
+                    **generation_parameters,
+                )
+
                 return StreamingResponse(
-                    response.aiter_bytes(),
+                    forward_stream(
+                        response,
+                        semaphore=brain_semaphore,
+                        model_name=BRAIN_MODEL,
+                    ),
                     status_code=response.status_code,
                     media_type=(
                         "text/event-stream"
@@ -482,8 +655,23 @@ async def chat_completions(
                         "X-Agent-Route": route,
                         "X-Agent-Input-Tokens":
                             str(input_tokens),
+
+                        # Prevent intermediary buffering.
+                        "Cache-Control": "no-cache",
+                        "X-Accel-Buffering": "no",
                     },
                 )
+
+            response = await call_model(
+                request,
+                BRAIN_URL,
+                BRAIN_MODEL,
+                messages,
+                semaphore=brain_semaphore,
+                model_name=BRAIN_MODEL,
+                stream=False,
+                **generation_parameters,
+            )
 
             return await forward_response(
                 response,
@@ -522,6 +710,39 @@ async def chat_completions(
                 route,
             )
 
+            if stream:
+
+                response = await stream_model(
+                    request,
+                    WORKER_URL,
+                    WORKER_MODEL,
+                    messages,
+                    semaphore=worker_semaphore,
+                    model_name=WORKER_MODEL,
+                    **generation_parameters,
+                )
+
+                return StreamingResponse(
+                    forward_stream(
+                        response,
+                        semaphore=worker_semaphore,
+                        model_name=WORKER_MODEL,
+                    ),
+                    status_code=response.status_code,
+                    media_type=(
+                        "text/event-stream"
+                    ),
+                    headers={
+                        "X-Agent-Route": route,
+                        "X-Agent-Input-Tokens":
+                            str(input_tokens),
+
+                        # Prevent intermediary buffering.
+                        "Cache-Control": "no-cache",
+                        "X-Accel-Buffering": "no",
+                    },
+                )
+
             response = await call_model(
                 request,
                 WORKER_URL,
@@ -529,7 +750,7 @@ async def chat_completions(
                 messages,
                 semaphore=worker_semaphore,
                 model_name=WORKER_MODEL,
-                stream=stream,
+                stream=False,
                 **generation_parameters,
             )
 
@@ -547,6 +768,39 @@ async def chat_completions(
                 route,
             )
 
+            if stream:
+
+                response = await stream_model(
+                    request,
+                    BRAIN_URL,
+                    BRAIN_MODEL,
+                    messages,
+                    semaphore=brain_semaphore,
+                    model_name=BRAIN_MODEL,
+                    **generation_parameters,
+                )
+
+                return StreamingResponse(
+                    forward_stream(
+                        response,
+                        semaphore=brain_semaphore,
+                        model_name=BRAIN_MODEL,
+                    ),
+                    status_code=response.status_code,
+                    media_type=(
+                        "text/event-stream"
+                    ),
+                    headers={
+                        "X-Agent-Route": route,
+                        "X-Agent-Input-Tokens":
+                            str(input_tokens),
+
+                        # Prevent intermediary buffering.
+                        "Cache-Control": "no-cache",
+                        "X-Accel-Buffering": "no",
+                    },
+                )
+
             response = await call_model(
                 request,
                 BRAIN_URL,
@@ -554,28 +808,13 @@ async def chat_completions(
                 messages,
                 semaphore=brain_semaphore,
                 model_name=BRAIN_MODEL,
-                stream=stream,
+                stream=False,
                 **generation_parameters,
             )
 
         # ----------------------------------------------------
         # Return result
         # ----------------------------------------------------
-
-        if stream:
-
-            return StreamingResponse(
-                response.aiter_bytes(),
-                status_code=response.status_code,
-                media_type=(
-                    "text/event-stream"
-                ),
-                headers={
-                    "X-Agent-Route": route,
-                    "X-Agent-Input-Tokens":
-                        str(input_tokens),
-                },
-            )
 
         return await forward_response(
             response,
@@ -625,6 +864,7 @@ async def root():
         "models": "/v1/models",
         "health": "/health",
     }
+
 
 @app.get("/models")
 @app.get("/v1/models")
