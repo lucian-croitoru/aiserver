@@ -1,0 +1,17 @@
+# Place this file in /etc/systemd/system
+# After placing it, run:
+#  - `sudo systemctl daemon-reload`
+#  - `sudo systemctl enable llama-router.service`
+
+[Unit]
+Description=Custom LLM router
+After=multi-user.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/llama-router.env
+ExecStart=/usr/local/bin/llama-router.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
