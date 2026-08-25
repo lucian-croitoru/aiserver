@@ -1,0 +1,17 @@
+# Place this file in /etc/systemd/system
+# After placing it, run:
+#  - `sudo systemctl daemon-reload`
+#  - `sudo systemctl enable sdxl-server.service`
+
+[Unit]
+Description=SDXL server
+After=multi-user.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/sdxl-server.env
+ExecStart=/usr/local/bin/sdxl-server.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
