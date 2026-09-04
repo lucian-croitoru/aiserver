@@ -38,7 +38,6 @@ class ImageResponse(BaseModel):
     created: int
     data: list
 
-
 @app.get("/")
 async def root():
     return {"message": "SDXL Image Generation API - Use /v1/images/generations endpoint"}
