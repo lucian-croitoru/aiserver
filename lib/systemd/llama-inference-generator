@@ -1,0 +1,36 @@
+#!/bin/bash
+# Systemd generator for llama-inference@.service
+#
+# Installs to: /etc/systemd/system-generators/llama-inference-generator (chmod +x)
+#
+# Runs on boot and on every `systemctl daemon-reload`. For every
+# /etc/llama-inference/<name>.env it enables the instance
+# llama-inference@<name>.service, so the running set of instances always
+# matches the set of config files. Remove a .env file and run
+# `systemctl daemon-reload` to disable that instance again.
+
+set -u
+
+CONFIG_DIR="${LLAMA_INFERENCE_CONFIG_DIR:-/etc/llama-inference}"
+TEMPLATE="${LLAMA_INFERENCE_TEMPLATE:-/etc/systemd/system/llama-inference@.service}"
+
+# Generator arguments: $1 = runtime output dir, $2 = system unit path, $3 = local unit path
+RUNTIME_DIR="${1:-/run/systemd/generator}"
+
+[ -d "$CONFIG_DIR" ] || exit 0
+[ -f "$TEMPLATE" ] || exit 0
+
+WANTS_DIR="$RUNTIME_DIR/multi-user.target.wants"
+mkdir -p "$WANTS_DIR"
+
+for env_file in "$CONFIG_DIR"/*.env; do
+    [ -f "$env_file" ] || continue
+    name="$(basename "$env_file" .env)"
+    if [[ ! "$name" =~ ^[A-Za-z0-9:_.@-]+$ ]]; then
+        echo "llama-inference-generator: skipping invalid instance name: $name" >&2
+        continue
+    fi
+    ln -sf "$TEMPLATE" "$WANTS_DIR/llama-inference@${name}.service"
+done
+
+exit 0
