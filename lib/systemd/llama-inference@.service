@@ -5,9 +5,9 @@
 # `systemctl daemon-reload`, so there is nothing to enable manually.
 #
 # Manage a single instance:
-#   systemctl start   llama-inference@brain.service
-#   systemctl restart llama-inference@worker.service
-#   systemctl stop    llama-inference@triager.service
+#   systemctl start   llama-inference@planner1.service
+#   systemctl restart llama-inference@worker1.service
+#   systemctl stop    llama-inference@worker2.service
 # Manage all instances:
 #   systemctl restart 'llama-inference@*.service'
 #
