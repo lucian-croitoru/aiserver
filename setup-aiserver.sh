@@ -13,10 +13,13 @@ set -e
 apt install wget nvidia-driver-580 nvidia-cuda-toolkit nvtop cifs-utils cmake build-essential libnccl-dev libssl-dev python3-pip python3-dev python3-venv
 
 RESET_NVIDIA_UNDERCLOCK_CONFIG=0
-RESET_LLAMA_SERVER_CONFIG=0
+# Default to reset (fresh install uses repo defaults and does not auto-start)
+RESET_LLAMA_INFERENCE_CONFIG=1
 INSTALL_DIR="/usr/local"
 NVIDIA_UNDERCLOCK_SERVICE="nvidia-underclock"
-LLAMA_SERVER_SERVICE="llama-server"
+LLAMA_INFERENCE_SERVICE="llama-inference"
+LLAMA_INFERENCE_CONFIG_DIR="/etc/llama-inference"
+LLAMA_SERVER_SCRIPT="llama-server"
 
 
 # Set a log prefix for every internal `echo` command
@@ -52,43 +55,10 @@ else
   RESET_NVIDIA_UNDERCLOCK_CONFIG=1
 fi
 
-# Check for existing llama-server config
-if test -f "/etc/$LLAMA_SERVER_SERVICE.env"; then
-  echo "WARNING: existing configuration found for [$LLAMA_SERVER_SERVICE.service]"
-  while true; do
-    read -p "$LOG_PREFIX Do you want to 'keep' or 'reset'?: " response
-    case $response in
-      [Kk][Ee][Ee][Pp])
-        # Do nothing
-        break
-        ;;
-      [Rr][Ee][Ss][Ee][Tt])
-        # Flag reset settings
-        RESET_LLAMA_SERVER_CONFIG=1
-        break
-        ;;
-      *)
-        echo "Please answer with 'keep' or 'reset'."
-        ;;
-    esac
-  done
-else
-  RESET_LLAMA_SERVER_CONFIG=1
-fi
-
-
 ### Install llama.cpp
-# Stop service if running
-if systemctl cat "$LLAMA_SERVER_SERVICE.service" &>/dev/null; then
-    if systemctl is-active --quiet "$LLAMA_SERVER_SERVICE.service"; then
-        # Service exists and is running: stop the service
-        echo "Stopping $LLAMA_SERVER_SERVICE.service..."
-        systemctl stop "$LLAMA_SERVER_SERVICE".service
-    fi
-fi
 
 # Cleanup folders
-echo "Installing $LLAMA_SERVER_SERVICE..."
+echo "Installing $LLAMA_INFERENCE_SERVICE..."
 rm -rf $INSTALL_DIR/llama.cpp
 cd $INSTALL_DIR
 
@@ -101,7 +71,11 @@ echo "Compiling..."
 cmake -B build \
   -DGGML_CUDA=ON \
   -DGGML_NCCL=ON \
-  -DGGML_CUDA_P2P=ON
+  -DGGML_CUDA_FA=ON \
+  -DGGML_CUDA_P2P=ON \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DGGML_CUDA_FORCE_MMQ=ON \
+  -DCMAKE_CUDA_ARCHITECTURES="75;86"
 
 echo "Done."
 
@@ -113,20 +87,47 @@ echo "Done."
 # Setup services
 echo "Setting up services..."
 if [ $RESET_NVIDIA_UNDERCLOCK_CONFIG -gt 0 ]; then
-  cp -f $PWD/lib/$NVIDIA_UNDERCLOCK_SERVICE.env /etc/$NVIDIA_UNDERCLOCK_SERVICE.env
+  cp -f $PWD/lib/configs/$NVIDIA_UNDERCLOCK_SERVICE.env /etc/$NVIDIA_UNDERCLOCK_SERVICE.env
 fi
 
-if [ $RESET_LLAMA_SERVER_CONFIG -gt 0 ]; then
-  cp -f $PWD/lib/$LLAMA_SERVER_SERVICE.env /etc/$LLAMA_SERVER_SERVICE.env
+mkdir -p $LLAMA_INFERENCE_CONFIG_DIR
+if [ $RESET_LLAMA_INFERENCE_CONFIG -gt 0 ]; then
+  cp -f $PWD/lib/configs/llama-inference/*.env $LLAMA_INFERENCE_CONFIG_DIR/
+else
+  # Install repo defaults for instances that have no config yet
+  for env_file in $PWD/lib/configs/llama-inference/*.env; do
+      name=$(basename "$env_file")
+      [ -f "$LLAMA_INFERENCE_CONFIG_DIR/$name" ] || cp -f "$env_file" "$LLAMA_INFERENCE_CONFIG_DIR/$name"
+  done
 fi
 
-cp $PWD/lib/*.sh $INSTALL_DIR/bin
-cp $PWD/lib/*.service /etc/systemd/system
+cp $PWD/lib/scripts/*.sh $INSTALL_DIR/bin
+cp $PWD/lib/systemd/nvidia-underclock.service /etc/systemd/system
+cp $PWD/lib/systemd/llama-inference@.service /etc/systemd/system
+mkdir -p /etc/systemd/system-generators
+cp $PWD/lib/systemd/llama-inference-generator /etc/systemd/system-generators/
 chmod +x $INSTALL_DIR/bin/$NVIDIA_UNDERCLOCK_SERVICE.sh
-chmod +x $INSTALL_DIR/bin/$LLAMA_SERVER_SERVICE.sh
+chmod +x $INSTALL_DIR/bin/$LLAMA_SERVER_SCRIPT.sh
+chmod +x /etc/systemd/system-generators/llama-inference-generator
+
+# The template must be installed WITH the @ in its filename. A plain
+# llama-inference.service would load as a non-template unit with an empty
+# instance and fail with "Failed to load environment files".
+if [ -f /etc/systemd/system/$LLAMA_INFERENCE_SERVICE.service ]; then
+    echo "Removing misnamed /etc/systemd/system/$LLAMA_INFERENCE_SERVICE.service (must be $LLAMA_INFERENCE_SERVICE@.service)..."
+    rm -f /etc/systemd/system/$LLAMA_INFERENCE_SERVICE.service
+fi
+[ -f /etc/systemd/system/$LLAMA_INFERENCE_SERVICE@.service ] || { echo "ERROR: $LLAMA_INFERENCE_SERVICE@.service is not installed."; exit 1; }
+
 systemctl daemon-reload
 systemctl enable $NVIDIA_UNDERCLOCK_SERVICE.service
-systemctl enable $LLAMA_SERVER_SERVICE.service
+# llama-inference instances are auto-enabled by the generator on daemon-reload
+
+# Sanity check: the generator must have enabled at least one instance
+if ! systemctl list-unit-files "llama-inference@*.service" | grep -q "llama-inference@"; then
+    echo "ERROR: no $LLAMA_INFERENCE_SERVICE instances enabled. Check $LLAMA_INFERENCE_CONFIG_DIR/*.env and /etc/systemd/system-generators/llama-inference-generator."
+    exit 1
+fi
 
 
 # Restart services
@@ -135,14 +136,18 @@ systemctl restart $NVIDIA_UNDERCLOCK_SERVICE.service
 echo "[INFO]: Edit /etc/$NVIDIA_UNDERCLOCK_SERVICE.env to tweak NVIDIA GPU settings."
 echo "[INFO]: Run 'sudo systemctl restart $NVIDIA_UNDERCLOCK_SERVICE.service' for the settings to take effect."
 
-if [ $RESET_LLAMA_SERVER_CONFIG -gt 0 ]; then
-  echo "[WARNING]: $LLAMA_SERVER_SERVICE.service was not started because the configuration was reset."
+if [ $RESET_LLAMA_INFERENCE_CONFIG -gt 0 ]; then
+  echo "[WARNING]: $LLAMA_INFERENCE_SERVICE instances were not started because the configuration was reset."
 else
-  echo "Restarting $LLAMA_SERVER_SERVICE.service..."
-  systemctl restart $LLAMA_SERVER_SERVICE.service
+  if ls $LLAMA_INFERENCE_CONFIG_DIR/*.env &>/dev/null; then
+    echo "Starting $LLAMA_INFERENCE_SERVICE instances..."
+    systemctl start 'llama-inference@*.service'
+  fi
 fi
-echo "[INFO]: Edit /etc/$LLAMA_SERVER_SERVICE.env to specify the model file path and other settings for the llama server."
-echo "[INFO]: Run 'sudo systemctl restart $LLAMA_SERVER_SERVICE.service' for the settings to take effect."
+echo "[INFO]: Edit $LLAMA_INFERENCE_CONFIG_DIR/<name>.env to tweak a specific llama server instance."
+echo "[INFO]: Add $LLAMA_INFERENCE_CONFIG_DIR/<name>.env and run 'sudo systemctl daemon-reload' to add an instance."
+echo "[INFO]: Run 'sudo systemctl restart llama-inference@<name>.service' to restart a single instance."
+echo "[INFO]: Run 'sudo systemctl restart llama-inference@*.service' to restart all instances."
 
 
 # Finish

@@ -131,7 +131,7 @@ def generate_image(prompt: str,
         num_inference_steps=num_inference_steps,
         generator=generator
     ).images[0]
-    base_image.save("base.png")
+    # base_image.save("base.png")
  
     logger.info("Refining image details...")
     refined_image = refiner_model(
@@ -142,10 +142,11 @@ def generate_image(prompt: str,
         num_inference_steps=STEPS_REFINER,
         strength=0.45
     ).images[0]
-    refined_image.save("refined.png")
+    # refined_image.save("refined.png")
  
-    logger.info("Upscaling...")
-    upscaled_image = upscale_image(refined_image, 2)
-    upscaled_image.save("upscaled.png")
-
-    return upscaled_image
+    # logger.info("Upscaling...")
+    # upscaled_image = upscale_image(refined_image, 2)
+    # upscaled_image.save("upscaled.png")
+    # return upscaled_image, seed
+    
+    return refined_image, seed

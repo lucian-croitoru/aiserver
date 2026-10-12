@@ -1,12 +1,13 @@
 import base64
 import io
 import time
-from typing import Optional
+from typing import Optional, Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 import traceback
+from uuid import uuid4
 
 from sdxl.models import (NEGATIVE_PROMPT,
                          WIDTH,
@@ -31,11 +32,11 @@ class ImageRequest(BaseModel):
     guidance_scale: Optional[float] = GUIDANCE
     num_inference_steps: Optional[int] = STEPS_BASE
     seed: Optional[int] = None
+    response_type: Literal["file", "b64_json"] = "file"
 
 class ImageResponse(BaseModel):
     created: int
     data: list
-
 
 @app.get("/")
 async def root():
@@ -45,7 +46,7 @@ async def root():
 async def generate_images(request: ImageRequest):
     try:
         # Generate the image
-        image = generate_image(
+        image, seed = generate_image(
             prompt=request.prompt,
             negative_prompt=request.negative_prompt or NEGATIVE_PROMPT,
             width=request.width,
@@ -55,19 +56,25 @@ async def generate_images(request: ImageRequest):
             seed=request.seed
         )
         
-        # Convert image to base64
+        # Encode image to base64 (used by both paths)
         buffer = io.BytesIO()
         image.save(buffer, format="PNG")
         buffer.seek(0)
-        image_b64 = base64.b64encode(buffer.getvalue()).decode()
-        
-        # Return response in OpenAI format
-        response = ImageResponse(
-            created=int(time.time()),
-            data=[{"b64_json": image_b64}]
+
+        if request.response_type == "b64_json":
+            image_b64 = base64.b64encode(buffer.getvalue()).decode()
+            return ImageResponse(
+                created=int(time.time()),
+                data=[{"b64_json": image_b64, "seed": seed}]
+            )
+
+        # Default: return downloadable file
+        return Response(
+            content=buffer.getvalue(),
+            media_type="image/png",
+            headers={"Content-Disposition": f'attachment; filename="{uuid4()}_seed_{seed}.png"'}
         )
-        
-        return response
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=traceback.format_exc())
 
