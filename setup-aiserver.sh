@@ -71,7 +71,11 @@ echo "Compiling..."
 cmake -B build \
   -DGGML_CUDA=ON \
   -DGGML_NCCL=ON \
-  -DGGML_CUDA_P2P=ON
+  -DGGML_CUDA_FA=ON \
+  -DGGML_CUDA_P2P=ON \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DGGML_CUDA_FORCE_MMQ=ON \
+  -DCMAKE_CUDA_ARCHITECTURES="75;86"
 
 echo "Done."
 
