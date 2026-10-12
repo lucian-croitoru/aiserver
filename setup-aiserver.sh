@@ -87,7 +87,7 @@ echo "Done."
 # Setup services
 echo "Setting up services..."
 if [ $RESET_NVIDIA_UNDERCLOCK_CONFIG -gt 0 ]; then
-  cp -f $PWD/lib/$NVIDIA_UNDERCLOCK_SERVICE.env /etc/$NVIDIA_UNDERCLOCK_SERVICE.env
+  cp -f $PWD/lib/configs/$NVIDIA_UNDERCLOCK_SERVICE.env /etc/$NVIDIA_UNDERCLOCK_SERVICE.env
 fi
 
 mkdir -p $LLAMA_INFERENCE_CONFIG_DIR
@@ -102,7 +102,7 @@ else
 fi
 
 cp $PWD/lib/scripts/*.sh $INSTALL_DIR/bin
-cp $PWD/lib/nvidia-underclock.service /etc/systemd/system
+cp $PWD/lib/systemd/nvidia-underclock.service /etc/systemd/system
 cp $PWD/lib/systemd/llama-inference@.service /etc/systemd/system
 mkdir -p /etc/systemd/system-generators
 cp $PWD/lib/systemd/llama-inference-generator /etc/systemd/system-generators/
