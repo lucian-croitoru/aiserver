@@ -1,109 +1,140 @@
-# GPU and Llama Server Configuration
+# aiserver
 
-This project provides a way to configure both NVIDIA GPU settings and Llama.cpp server using environment variables instead of hardcoded values.
+Deploy and manage llama.cpp inference servers on home GPU servers using
+environment files and systemd. Also includes an experimental SDXL image
+generation API and a reference script for Unraid GPU passthrough.
 
-## Files
+## How it works
 
-### NVIDIA Settings
-1. `nvidia-underclock.sh` - The script that applies NVIDIA GPU settings
-2. `nvidia-underclock.service` - Systemd service file to run the script at boot
-3. `nvidia-underclock.env` - Environment file containing NVIDIA configuration values
+- `nvidia-underclock.service` — applies per-GPU-type power limits and clock
+  ranges at boot, driven by `/etc/nvidia-underclock.env`.
+- `llama-inference@.service` — a systemd **template unit**: one instance per
+  config file in `/etc/llama-inference/<name>.env`.
+- `llama-inference-generator` — a systemd generator that auto-enables an
+  instance for every `.env` file it finds, on boot and on every
+  `systemctl daemon-reload`. The running set of instances always matches the
+  set of config files.
 
-### Llama Server
-4. `llama-server.sh` - The script that starts the Llama.cpp server
-5. `llama-server.service` - Systemd service file to run the server at boot
-6. `llama-server.env` - Environment file containing Llama server configuration values
+### Managing instances
 
-## NVIDIA Environment Variables
+```bash
+# one instance
+systemctl start   llama-inference@<name>.service
+systemctl restart llama-inference@<name>.service
+systemctl stop    llama-inference@<name>.service
 
-The NVIDIA script uses the following environment variables:
+# all instances
+systemctl restart 'llama-inference@*.service'
 
-- `NVIDIA_POWER_LIMIT` - Power limit in watts
-- `NVIDIA_MEMORY_CLOCKS` - Memory clocks setting (format: min,max)
-- `NVIDIA_GRAPHICS_CLOCKS` - Graphics clocks setting (format: min,max)
+# add an instance: put a config at /etc/llama-inference/<name>.env, then
+sudo systemctl daemon-reload
 
-The script will only execute commands for variables that are set and non-empty. If a variable is not set or has an empty value (e.g., `NVIDIA_POWER_LIMIT=`), the corresponding command will be skipped.
+# remove an instance: delete the .env file, then
+sudo systemctl daemon-reload
+```
 
-## Llama Server Environment Variables
-
-The Llama server script a single `LLAMA_SERVER_ARGS` variable in `/etc/llama-server.env` to pass all arguments for `llama.cpp`'s `llama-server`. Other `lama-server` environment variables can also be written. 
-
-### Example args for llama-server.env
-~~~
-# DGGML_CUDA_FORCE_MMQ=1
-# DGGML_CUDA_FORCE_CUBLAS=1
-# GGML_CUDA_ENABLE_UNIFIED_MEMORY=1
-CUDA_VISIBLE_DEVICES=0,1
-
-LLAMA_SERVER_ARGS="-m /etc/models/Qwen3.6-35B-A3B-UD-Q8_K_XL_MTP.gguf \
-  --mmproj /etc/models/Qwen3.6-35B-A3B-mmproj-F16.gguf \
-  -ngl 999 \
-  -sm layer \
-  -ts 1,1 \
-  -fa on \
-  --no-mmap \
-  --host 0.0.0.0 \
-  --port 8111 \
-  -ctk q8_0 \
-  -ctv q8_0 \
-  --ctx-size 262144 \
-  --cont-batching \
-  --threads 2 \
-  --threads-batch 2 \
-  --spec-type draft-mtp,ngram-mod \
-  --spec-draft-n-max 2 \
-  -b 1024 \
-  -ub 256 \
-  --temp 0.45 \
-  --top-p 0.90 \
-  --top-k 40 \
-  --presence-penalty 0.60 \
-  --repeat-penalty 1.05 \
-  --reasoning-budget 16384
-  "
-~~~
-
-
-~~~
-# DGGML_CUDA_FORCE_MMQ=1
-# DGGML_CUDA_FORCE_CUBLAS=1
-# GGML_CUDA_ENABLE_UNIFIED_MEMORY=1
-CUDA_VISIBLE_DEVICES=2,3
-
-LLAMA_SERVER_ARGS="-m /etc/models/Qwen3.5-9B-UD-Q8_K_XL_MTP.gguf \
-  --mmproj /etc/models/Qwen3.5-9B-mmproj-F16.gguf \
-  -ngl 999 \
-  -sm layer \
-  -ts 14,10 \
-  -fa on \
-  --no-mmap \
-  --host 0.0.0.0 \
-  --port 8112 \
-  -ctk q8_0 \
-  -ctv q8_0 \
-  --ctx-size 262144 \
-  --cont-batching \
-  --parallel 2 \
-  --threads 2 \
-  --threads-batch 2 \
-  --spec-type draft-mtp,ngram-mod \
-  --spec-draft-n-max 2 \
-  -b 1024 \
-  -ub 256 \
-  --temp 0.25 \
-  --top-p 0.85 \
-  --top-k 30 \
-  --presence-penalty 0.20 \
-  --repeat-penalty 1.10 \
-  --reasoning-budget 8192
-  "
-~~~
+Instances restart automatically on failure (`Restart=on-failure`).
 
 ## Installation
 
-Run `chmod +x setup-aiserver`
-Modify the `nvidia-underclock.env` and / or `llama-server.env` files in `/etc` with your desired values.
-After installation, both services will automatically apply their respective settings at boot time.
+Run as root (the script calls `apt` and `systemctl` directly):
 
-### Other notes
-In `/etc/fstab` add `//[SERVER_NAME]/[SHARE_NAME] /mnt/models cifs guest` as a SMB share to copy models from
+```bash
+chmod +x setup-aiserver.sh
+./setup-aiserver.sh
+```
+
+The script:
+
+1. Installs build dependencies and the NVIDIA driver.
+2. Clones and compiles `llama.cpp` with CUDA into `/usr/local/llama.cpp`.
+3. Installs the systemd units, the generator, the helper scripts
+   (`/usr/local/bin`), and the default configs.
+
+### Hardcoded values you may need to change
+
+- **NVIDIA driver** — `setup-aiserver.sh` installs `nvidia-driver-580`.
+  Change the package name to the driver you want.
+- **CUDA architectures** — the build is compiled for `75;86` (Turing, Ampere).
+  Add your GPU's architecture to `CMAKE_CUDA_ARCHITECTURES` in
+  `setup-aiserver.sh` (e.g. `89` for Ada, `90` for Hopper).
+- **llama.cpp version** — the script clones `master` and rebuilds on every
+  run. Pin a release tag if you want reproducible installs.
+
+## Configuration
+
+### `/etc/llama-inference/<name>.env`
+
+One file per inference instance. The file is loaded as a systemd
+`EnvironmentFile`; everything in `LLAMA_SERVER_ARGS` is passed to
+`llama-server` as-is. `LLAMA_SERVER_DELAY` (seconds) is an optional per-
+instance startup delay applied via `ExecStartPre`, useful for staggering
+model loads across instances.
+
+> **Note:** a fresh install creates `/etc/llama-inference/default.env` with a
+> placeholder model path. It defines a real instance, so you must either edit
+> it with your own model and settings, or replace it with a real config.
+> Until you do, `llama-inference@default` will fail to start.
+>
+> See `examples/` for ready-made configs you can copy and adapt.
+
+### `/etc/nvidia-underclock.env`
+
+Per-GPU-type power limits and clock ranges, e.g.:
+
+```
+NVIDIA_POWER_LIMIT_RTX3090=250
+NVIDIA_MEMORY_CLOCKS_RTX3090=405,9501
+NVIDIA_GRAPHICS_CLOCKS_RTX3090=210,1800
+```
+
+Leave a value blank to skip it. The file's comments list the supported GPU
+types and how to add more.
+
+## Security notes
+
+- The default and example configs bind `llama-server` to `--host 0.0.0.0`
+  with **no authentication**. That is fine on a trusted home LAN, but do not
+  expose these ports to the internet — anyone who can reach them can use your
+  GPU and see whatever the model is asked.
+- The SDXL API below is the same story: no auth, all interfaces.
+
+## Models over CIFS (optional)
+
+If you keep your GGUF models on a network share, mount it in `/etc/fstab`:
+
+```
+//<server>/<share> /mnt/models cifs guest 0 0
+```
+
+and point `LLAMA_SERVER_ARGS` at `/mnt/models/...` instead of
+`/etc/models/...`.
+
+## SDXL image generation API (experimental, manual setup)
+
+`sdxl/` contains a minimal, work-in-progress OpenAI-compatible image
+generation API (FastAPI + diffusers). It is **not** installed by
+`setup-aiserver.sh`; set it up manually if you want it:
+
+```bash
+source venv.sh                        # builds .venv, installs requirements.txt
+sudo cp lib/systemd/sdxl-server.service /etc/systemd/system/
+sudo cp lib/configs/sdxl-server.env /etc/sdxl-server.env
+sudo systemctl daemon-reload
+sudo systemctl enable --now sdxl-server
+```
+
+- Listens on `0.0.0.0:8115`; endpoint `POST /v1/images/generations`.
+- `sdxl/models.py` hardcodes the base model to `cuda:2` and the refiner to
+  `cuda:3` — change the `DESTINATION` in each class to match your setup.
+- `sdxl-server.sh` and `sdxl-server.env` assume the repo lives in `~/aiserver`
+  with the venv in `~/aiserver/.venv`; adjust the paths if yours is elsewhere.
+- See `sdxl/README.md` for the API reference.
+
+## Unraid GPU passthrough (reference)
+
+`host_lib/update_vm_gpus.sh` is a reference script for Unraid users: it
+rewrites a libvirt VM's XML to pass through every NVIDIA RTX GPU it finds on
+the host, using the PCI addresses assigned at boot. The GPU name list, VM XML
+path, and ROM folder are hardcoded at the top of the script — adapt them to
+your setup.
