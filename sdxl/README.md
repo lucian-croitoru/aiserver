@@ -71,7 +71,7 @@ The server will start on `http://0.0.0.0:8115`
 ## Usage Example
 
 ```bash
-curl -X POST "http://localhost:8113/v1/images/generations" \
+curl -X POST "http://localhost:8115/v1/images/generations" \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "A character portrait of a RPG game bearded warrior with a stern expression. Grayscale pencil sketch.",
