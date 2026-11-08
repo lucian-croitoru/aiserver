@@ -66,7 +66,7 @@ pip install -r requirements.txt
 python sdxl/sdxl_server.py
 ```
 
-The server will start on `http://0.0.0.0:8113`
+The server will start on `http://0.0.0.0:8115`
 
 ## Usage Example
 
