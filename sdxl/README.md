@@ -89,5 +89,5 @@ curl -X POST "http://localhost:8115/v1/images/generations" \
 | width | integer | 1024 | Image width |
 | height | integer | 768 | Image height |
 | guidance_scale | float | 7.0 | CFG scale |
-| num_inference_steps | integer | 40 | Number of inference steps |
+| num_inference_steps | integer | 20 | Number of inference steps |
 | seed | integer | Random | Random seed |
