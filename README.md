@@ -4,6 +4,11 @@ Deploy and manage llama.cpp inference servers on home GPU servers using
 environment files and systemd. Also includes an experimental SDXL image
 generation API and a reference script for Unraid GPU passthrough.
 
+This repo started as an experimental project for my own homelab and is
+intended primarily for personal use. The goal is simple: help local AI enthusiasts get
+their inference engines running quickly with minimal fuss. Nothing too fancy —
+just the setup that works for me, shared in case it saves you some time.
+
 ## How it works
 
 - `nvidia-underclock.service` — applies per-GPU-type power limits and clock
