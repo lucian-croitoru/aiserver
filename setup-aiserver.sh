@@ -78,6 +78,7 @@ cmake -B build \
   -DGGML_CUDA_FORCE_CUBLAS=OFF \
   -DCMAKE_CUDA_ARCHITECTURES="75;86"
 
+# 75 = Turing, 86 = Ampere
 echo "Done."
 
 echo "Building..."
@@ -110,15 +111,6 @@ cp $PWD/lib/systemd/llama-inference-generator /etc/systemd/system-generators/
 chmod +x $INSTALL_DIR/bin/$NVIDIA_UNDERCLOCK_SERVICE.sh
 chmod +x $INSTALL_DIR/bin/$LLAMA_SERVER_SCRIPT.sh
 chmod +x /etc/systemd/system-generators/llama-inference-generator
-
-# The template must be installed WITH the @ in its filename. A plain
-# llama-inference.service would load as a non-template unit with an empty
-# instance and fail with "Failed to load environment files".
-if [ -f /etc/systemd/system/$LLAMA_INFERENCE_SERVICE.service ]; then
-    echo "Removing misnamed /etc/systemd/system/$LLAMA_INFERENCE_SERVICE.service (must be $LLAMA_INFERENCE_SERVICE@.service)..."
-    rm -f /etc/systemd/system/$LLAMA_INFERENCE_SERVICE.service
-fi
-[ -f /etc/systemd/system/$LLAMA_INFERENCE_SERVICE@.service ] || { echo "ERROR: $LLAMA_INFERENCE_SERVICE@.service is not installed."; exit 1; }
 
 systemctl daemon-reload
 systemctl enable $NVIDIA_UNDERCLOCK_SERVICE.service
