@@ -9,6 +9,9 @@
 # Exit immediately on error
 set -e
 
+# Directory of this repo (captured before we cd elsewhere)
+REPO_DIR="$PWD"
+
 # Define global variables
 apt install wget nvidia-driver-580 nvidia-cuda-toolkit nvtop cifs-utils cmake build-essential libnccl-dev libssl-dev python3-pip python3-dev python3-venv
 
@@ -89,25 +92,25 @@ echo "Done."
 # Setup services
 echo "Setting up services..."
 if [ $RESET_NVIDIA_UNDERCLOCK_CONFIG -gt 0 ]; then
-  cp -f $PWD/lib/configs/$NVIDIA_UNDERCLOCK_SERVICE.env /etc/$NVIDIA_UNDERCLOCK_SERVICE.env
+  cp -f $REPO_DIR/lib/configs/$NVIDIA_UNDERCLOCK_SERVICE.env /etc/$NVIDIA_UNDERCLOCK_SERVICE.env
 fi
 
 mkdir -p $LLAMA_INFERENCE_CONFIG_DIR
 if [ $RESET_LLAMA_INFERENCE_CONFIG -gt 0 ]; then
-  cp -f $PWD/lib/configs/llama-inference/*.env $LLAMA_INFERENCE_CONFIG_DIR/
+  cp -f $REPO_DIR/lib/configs/llama-inference/*.env $LLAMA_INFERENCE_CONFIG_DIR/
 else
   # Install repo defaults for instances that have no config yet
-  for env_file in $PWD/lib/configs/llama-inference/*.env; do
+  for env_file in $REPO_DIR/lib/configs/llama-inference/*.env; do
       name=$(basename "$env_file")
       [ -f "$LLAMA_INFERENCE_CONFIG_DIR/$name" ] || cp -f "$env_file" "$LLAMA_INFERENCE_CONFIG_DIR/$name"
   done
 fi
 
-cp $PWD/lib/scripts/*.sh $INSTALL_DIR/bin
-cp $PWD/lib/systemd/nvidia-underclock.service /etc/systemd/system
-cp $PWD/lib/systemd/llama-inference@.service /etc/systemd/system
+cp $REPO_DIR/lib/scripts/*.sh $INSTALL_DIR/bin
+cp $REPO_DIR/lib/systemd/nvidia-underclock.service /etc/systemd/system
+cp $REPO_DIR/lib/systemd/llama-inference@.service /etc/systemd/system
 mkdir -p /etc/systemd/system-generators
-cp $PWD/lib/systemd/llama-inference-generator /etc/systemd/system-generators/
+cp $REPO_DIR/lib/systemd/llama-inference-generator /etc/systemd/system-generators/
 chmod +x $INSTALL_DIR/bin/$NVIDIA_UNDERCLOCK_SERVICE.sh
 chmod +x $INSTALL_DIR/bin/$LLAMA_SERVER_SCRIPT.sh
 chmod +x /etc/systemd/system-generators/llama-inference-generator
