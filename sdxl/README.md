@@ -66,12 +66,12 @@ pip install -r requirements.txt
 python sdxl/sdxl_server.py
 ```
 
-The server will start on `http://0.0.0.0:8113`
+The server will start on `http://0.0.0.0:8115`
 
 ## Usage Example
 
 ```bash
-curl -X POST "http://localhost:8113/v1/images/generations" \
+curl -X POST "http://localhost:8115/v1/images/generations" \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "A character portrait of a RPG game bearded warrior with a stern expression. Grayscale pencil sketch.",
@@ -89,5 +89,5 @@ curl -X POST "http://localhost:8113/v1/images/generations" \
 | width | integer | 1024 | Image width |
 | height | integer | 768 | Image height |
 | guidance_scale | float | 7.0 | CFG scale |
-| num_inference_steps | integer | 40 | Number of inference steps |
+| num_inference_steps | integer | 20 | Number of inference steps |
 | seed | integer | Random | Random seed |

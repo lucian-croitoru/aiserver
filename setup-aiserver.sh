@@ -9,6 +9,9 @@
 # Exit immediately on error
 set -e
 
+# Directory of this repo (captured before we cd elsewhere)
+REPO_DIR="$PWD"
+
 # Define global variables
 apt install wget nvidia-driver-580 nvidia-cuda-toolkit nvtop cifs-utils cmake build-essential libnccl-dev libssl-dev python3-pip python3-dev python3-venv
 
@@ -74,9 +77,11 @@ cmake -B build \
   -DGGML_CUDA_FA=ON \
   -DGGML_CUDA_P2P=ON \
   -DCMAKE_BUILD_TYPE=Release \
-  -DGGML_CUDA_FORCE_MMQ=ON \
+  -DGGML_CUDA_FORCE_MMQ=OFF \
+  -DGGML_CUDA_FORCE_CUBLAS=OFF \
   -DCMAKE_CUDA_ARCHITECTURES="75;86"
 
+# 75 = Turing, 86 = Ampere
 echo "Done."
 
 echo "Building..."
@@ -87,37 +92,28 @@ echo "Done."
 # Setup services
 echo "Setting up services..."
 if [ $RESET_NVIDIA_UNDERCLOCK_CONFIG -gt 0 ]; then
-  cp -f $PWD/lib/configs/$NVIDIA_UNDERCLOCK_SERVICE.env /etc/$NVIDIA_UNDERCLOCK_SERVICE.env
+  cp -f $REPO_DIR/lib/configs/$NVIDIA_UNDERCLOCK_SERVICE.env /etc/$NVIDIA_UNDERCLOCK_SERVICE.env
 fi
 
 mkdir -p $LLAMA_INFERENCE_CONFIG_DIR
 if [ $RESET_LLAMA_INFERENCE_CONFIG -gt 0 ]; then
-  cp -f $PWD/lib/configs/llama-inference/*.env $LLAMA_INFERENCE_CONFIG_DIR/
+  cp -f $REPO_DIR/lib/configs/llama-inference/*.env $LLAMA_INFERENCE_CONFIG_DIR/
 else
   # Install repo defaults for instances that have no config yet
-  for env_file in $PWD/lib/configs/llama-inference/*.env; do
+  for env_file in $REPO_DIR/lib/configs/llama-inference/*.env; do
       name=$(basename "$env_file")
       [ -f "$LLAMA_INFERENCE_CONFIG_DIR/$name" ] || cp -f "$env_file" "$LLAMA_INFERENCE_CONFIG_DIR/$name"
   done
 fi
 
-cp $PWD/lib/scripts/*.sh $INSTALL_DIR/bin
-cp $PWD/lib/systemd/nvidia-underclock.service /etc/systemd/system
-cp $PWD/lib/systemd/llama-inference@.service /etc/systemd/system
+cp $REPO_DIR/lib/scripts/*.sh $INSTALL_DIR/bin
+cp $REPO_DIR/lib/systemd/nvidia-underclock.service /etc/systemd/system
+cp $REPO_DIR/lib/systemd/llama-inference@.service /etc/systemd/system
 mkdir -p /etc/systemd/system-generators
-cp $PWD/lib/systemd/llama-inference-generator /etc/systemd/system-generators/
+cp $REPO_DIR/lib/systemd/llama-inference-generator /etc/systemd/system-generators/
 chmod +x $INSTALL_DIR/bin/$NVIDIA_UNDERCLOCK_SERVICE.sh
 chmod +x $INSTALL_DIR/bin/$LLAMA_SERVER_SCRIPT.sh
 chmod +x /etc/systemd/system-generators/llama-inference-generator
-
-# The template must be installed WITH the @ in its filename. A plain
-# llama-inference.service would load as a non-template unit with an empty
-# instance and fail with "Failed to load environment files".
-if [ -f /etc/systemd/system/$LLAMA_INFERENCE_SERVICE.service ]; then
-    echo "Removing misnamed /etc/systemd/system/$LLAMA_INFERENCE_SERVICE.service (must be $LLAMA_INFERENCE_SERVICE@.service)..."
-    rm -f /etc/systemd/system/$LLAMA_INFERENCE_SERVICE.service
-fi
-[ -f /etc/systemd/system/$LLAMA_INFERENCE_SERVICE@.service ] || { echo "ERROR: $LLAMA_INFERENCE_SERVICE@.service is not installed."; exit 1; }
 
 systemctl daemon-reload
 systemctl enable $NVIDIA_UNDERCLOCK_SERVICE.service

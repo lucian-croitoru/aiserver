@@ -12,7 +12,7 @@
 # -----------------------------
 
 # Array of GPU names to search for (case-insensitive)
-GPU_NAMES=("RTX 3090" "RTX 2080 Ti")
+GPU_NAMES=("RTX 3090" "RTX 2080 Ti" "Quadro RTX 5000")
 
 # Full path to the VM XML file to edit
 VM_XML="/etc/libvirt/qemu/vmgpu1.xml"
