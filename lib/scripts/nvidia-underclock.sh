@@ -18,6 +18,8 @@ get_gpu_type() {
         echo "RTX3090"
     elif [[ "$gpu_name" == *"RTX 2080 Ti"* ]]; then
         echo "RTX2080TI"
+    elif [[ "$gpu_name" == *"Quadro RTX 5000"* ]]; then
+        echo "QUADRORTX5000"
     #else
         # For unknown GPU types, use the full name as identifier
     #    echo "${gpu_name// /}" | tr '[:upper:]' '[:lower:]'
